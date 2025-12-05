@@ -31,14 +31,51 @@
           </div>
 
           <div class="hand">
-            <h3>Your Hand:</h3>
-            <div class="card-grid">
-              <MtgCard
-                v-for="(card, index) in scenarioStore.currentScenario.hand"
+            <h3 v-if="scenarioStore.currentScenario.mulligan_count > 0">
+              London Mulligan: Select {{ scenarioStore.currentScenario.mulligan_count }} card{{ scenarioStore.currentScenario.mulligan_count > 1 ? 's' : '' }} to put on bottom
+            </h3>
+            <h3 v-else>Your Opening Hand:</h3>
+
+            <div class="mulligan-instructions" v-if="scenarioStore.currentScenario.mulligan_count > 0 && !mulliganComplete">
+              <p>
+                <strong>How London Mulligan Works:</strong><br>
+                You drew 7 cards and decided to mulligan. Now select {{ scenarioStore.currentScenario.mulligan_count }} card{{ scenarioStore.currentScenario.mulligan_count > 1 ? 's' : '' }} to put on the bottom of your library.
+                After that, you'll decide whether to keep the remaining {{ scenarioStore.currentScenario.num_cards }} or mulligan again.
+              </p>
+            </div>
+
+            <div class="card-grid" :class="{ 'selection-mode': scenarioStore.currentScenario.mulligan_count > 0 && !mulliganComplete }">
+              <div
+                v-for="(card, index) in displayedHand"
                 :key="index"
-                :card-name="card"
-                size="normal"
-              />
+                class="card-wrapper"
+                :class="{
+                  'selected': selectedCards.includes(index),
+                  'selectable': scenarioStore.currentScenario.mulligan_count > 0 && !mulliganComplete
+                }"
+                @click="toggleCardSelection(index)"
+              >
+                <MtgCard
+                  :card-name="card"
+                  size="normal"
+                />
+                <div v-if="selectedCards.includes(index)" class="selection-badge">
+                  Bottoming
+                </div>
+              </div>
+            </div>
+
+            <div v-if="scenarioStore.currentScenario.mulligan_count > 0 && !mulliganComplete" class="mulligan-actions">
+              <button
+                @click="confirmSelection"
+                class="btn btn-confirm"
+                :disabled="selectedCards.length !== scenarioStore.currentScenario.mulligan_count"
+              >
+                Confirm Selection ({{ selectedCards.length }}/{{ scenarioStore.currentScenario.mulligan_count }})
+              </button>
+              <button @click="clearSelection" class="btn btn-secondary">
+                Clear Selection
+              </button>
             </div>
           </div>
 
@@ -101,6 +138,9 @@ const authStore = useAuthStore()
 const loading = ref(true)
 const voting = ref(false)
 const userVote = ref(null)
+const selectedCards = ref([])
+const mulliganComplete = ref(false)
+const displayedHand = ref([])
 
 const loadScenario = async () => {
   loading.value = true
@@ -108,7 +148,44 @@ const loadScenario = async () => {
   if (authStore.isAuthenticated) {
     userVote.value = await scenarioStore.getUserVote(route.params.id)
   }
+
+  // Initialize displayed hand
+  displayedHand.value = [...scenarioStore.currentScenario.hand]
+  mulliganComplete.value = scenarioStore.currentScenario.mulligan_count === 0
+
   loading.value = false
+}
+
+const toggleCardSelection = (index) => {
+  if (mulliganComplete.value || scenarioStore.currentScenario.mulligan_count === 0) {
+    return // Can't select cards if mulligan is complete or no mulligan needed
+  }
+
+  const cardIndex = selectedCards.value.indexOf(index)
+
+  if (cardIndex > -1) {
+    // Deselect card
+    selectedCards.value.splice(cardIndex, 1)
+  } else {
+    // Select card (only if we haven't reached the limit)
+    if (selectedCards.value.length < scenarioStore.currentScenario.mulligan_count) {
+      selectedCards.value.push(index)
+    }
+  }
+}
+
+const confirmSelection = () => {
+  if (selectedCards.value.length !== scenarioStore.currentScenario.mulligan_count) {
+    return
+  }
+
+  // Remove selected cards from displayed hand (they're being bottomed)
+  displayedHand.value = scenarioStore.currentScenario.hand.filter((_, index) => !selectedCards.value.includes(index))
+  mulliganComplete.value = true
+}
+
+const clearSelection = () => {
+  selectedCards.value = []
 }
 
 const vote = async (decision) => {
@@ -174,11 +251,88 @@ h3 {
   margin-top: 1.5rem;
 }
 
+.mulligan-instructions {
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 4px;
+}
+
+.mulligan-instructions p {
+  margin: 0;
+  color: #1976d2;
+  line-height: 1.6;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.card-grid.selection-mode {
+  gap: 1.5rem;
+}
+
+.card-wrapper {
+  position: relative;
+  cursor: default;
+}
+
+.card-wrapper.selectable {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.card-wrapper.selectable:hover {
+  transform: translateY(-8px);
+}
+
+.card-wrapper.selected {
+  opacity: 0.6;
+}
+
+.selection-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: #e74c3c;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.mulligan-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+.btn-confirm {
+  background: #2ecc71;
+}
+
+.btn-confirm:hover:not(:disabled) {
+  background: #27ae60;
+}
+
+.btn-confirm:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #95a5a6;
+}
+
+.btn-secondary:hover {
+  background: #7f8c8d;
 }
 
 .decklist-info a {

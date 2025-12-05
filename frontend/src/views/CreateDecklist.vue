@@ -28,7 +28,38 @@
 
         <div class="form-group">
           <label>Archetype (optional)</label>
-          <input v-model="form.archetype" type="text" placeholder="e.g., Aggro, Control, Midrange" />
+          <div v-if="!showCustomArchetype">
+            <select v-model="form.archetype">
+              <option value="">Select an archetype (optional)</option>
+              <option v-for="archetype in availableArchetypes" :key="archetype" :value="archetype">
+                {{ archetype }}
+              </option>
+            </select>
+            <button
+              type="button"
+              @click="toggleCustomArchetype"
+              class="btn-link custom-archetype-toggle"
+              v-if="form.format"
+            >
+              My archetype isn't present
+            </button>
+            <p class="help-text">Archetypes are based on {{ form.format || 'the selected' }} format metagame</p>
+          </div>
+          <div v-else>
+            <input
+              v-model="customArchetype"
+              type="text"
+              placeholder="Enter your custom archetype (e.g., Sultai Tokens)"
+            />
+            <button
+              type="button"
+              @click="toggleCustomArchetype"
+              class="btn-link custom-archetype-toggle"
+            >
+              Choose from list instead
+            </button>
+            <p class="help-text">Enter a custom archetype name</p>
+          </div>
         </div>
 
         <div class="form-group">
@@ -94,9 +125,10 @@ Example:
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDecklistStore } from '../store'
+import { getArchetypesForFormat } from '../data/archetypes'
 
 const router = useRouter()
 const decklistStore = useDecklistStore()
@@ -112,6 +144,40 @@ const parseError = ref('')
 const submitting = ref(false)
 const isDragging = ref(false)
 const fileInput = ref(null)
+const showCustomArchetype = ref(false)
+const customArchetype = ref('')
+
+// Get archetypes based on selected format
+const availableArchetypes = computed(() => {
+  if (!form.value.format) {
+    return []
+  }
+  return getArchetypesForFormat(form.value.format)
+})
+
+// Reset archetype when format changes
+watch(() => form.value.format, () => {
+  // Clear archetype if it's not valid for the new format
+  if (form.value.archetype && !availableArchetypes.value.includes(form.value.archetype)) {
+    form.value.archetype = ''
+  }
+  // Reset custom archetype mode
+  showCustomArchetype.value = false
+  customArchetype.value = ''
+})
+
+const toggleCustomArchetype = () => {
+  showCustomArchetype.value = !showCustomArchetype.value
+  if (showCustomArchetype.value) {
+    // Switching to custom input
+    customArchetype.value = form.value.archetype || ''
+    form.value.archetype = ''
+  } else {
+    // Switching back to dropdown
+    form.value.archetype = customArchetype.value || ''
+    customArchetype.value = ''
+  }
+}
 
 const parseDecklist = () => {
   const lines = decklistText.value.split('\n').filter(line => line.trim())
@@ -245,12 +311,15 @@ const handleSubmit = async () => {
   const cards = parseDecklist()
   if (!cards) return
 
+  // Use custom archetype if present
+  const finalArchetype = showCustomArchetype.value ? customArchetype.value : form.value.archetype
+
   submitting.value = true
   try {
     const decklist = await decklistStore.createDecklist({
       name: form.value.name,
       format: form.value.format,
-      archetype: form.value.archetype || null,
+      archetype: finalArchetype || null,
       cards
     })
 
@@ -449,5 +518,11 @@ input:focus, select:focus, textarea:focus {
 
 .btn-link:hover {
   color: #2980b9;
+}
+
+.custom-archetype-toggle {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
 }
 </style>

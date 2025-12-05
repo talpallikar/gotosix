@@ -27,7 +27,9 @@ def init_routes(mongo):
         if num_cards < 0 or num_cards > 7:
             return jsonify({'message': 'Invalid number of cards (must be 0-7)'}), 400
 
-        hand = generate_hand(decklist['cards'], num_cards)
+        # London Mulligan: Always draw 7, then bottom cards based on mulligan count
+        mulligan_count = 7 - num_cards
+        hand = generate_hand(decklist['cards'], 7)  # Always generate 7 cards
 
         scenario = Scenario(
             decklist_id=ObjectId(data['decklist_id']),
@@ -35,13 +37,15 @@ def init_routes(mongo):
             on_play=data.get('on_play', True),
             opponent_archetype=data['opponent_archetype'],
             game_number=data['game_number'],
-            user_id=ObjectId(user_id)
+            user_id=ObjectId(user_id),
+            mulligan_count=mulligan_count
         )
 
         mongo.db.scenarios.insert_one({
             '_id': scenario._id,
             'decklist_id': scenario.decklist_id,
             'hand': scenario.hand,
+            'mulligan_count': scenario.mulligan_count,
             'num_cards': scenario.num_cards,
             'on_play': scenario.on_play,
             'opponent_archetype': scenario.opponent_archetype,
@@ -108,6 +112,15 @@ def init_routes(mongo):
     return scenario_bp
 
 def generate_hand(cards, num_cards):
+    """Generate a random hand from the decklist.
+
+    Args:
+        cards: List of {name, quantity} card objects
+        num_cards: Number of cards to draw (typically 7 for London Mulligan)
+
+    Returns:
+        List of card names
+    """
     deck = []
     for card in cards:
         deck.extend([card['name']] * card['quantity'])

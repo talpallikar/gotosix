@@ -1,0 +1,39 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: mtg-mulligan-backend
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '10'
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: us-central1-docker.pkg.dev/PROJECT_ID/mtg-mulligan/backend:latest
+        ports:
+        - name: http1
+          containerPort: 5000
+        env:
+        - name: FLASK_ENV
+          value: production
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-uri
+              key: uri
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: secret-key
+        - name: JWT_EXPIRATION_HOURS
+          value: '24'
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: '1'

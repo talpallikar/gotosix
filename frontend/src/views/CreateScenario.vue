@@ -46,12 +46,41 @@
 
         <div class="form-group">
           <label>Opponent's Archetype *</label>
-          <input
-            v-model="form.opponent_archetype"
-            type="text"
-            required
-            placeholder="e.g., Mono Red Aggro, Azorius Control"
-          />
+          <div v-if="!showCustomOpponentArchetype">
+            <select v-model="form.opponent_archetype" required>
+              <option value="">Select opponent's archetype</option>
+              <option v-for="archetype in opponentArchetypes" :key="archetype" :value="archetype">
+                {{ archetype }}
+              </option>
+            </select>
+            <button
+              type="button"
+              @click="toggleCustomOpponentArchetype"
+              class="btn-link custom-archetype-toggle"
+              v-if="selectedDecklistFormat"
+            >
+              My archetype isn't present
+            </button>
+            <p class="help-text" v-if="selectedDecklistFormat">
+              Showing {{ selectedDecklistFormat }} archetypes
+            </p>
+          </div>
+          <div v-else>
+            <input
+              v-model="customOpponentArchetype"
+              type="text"
+              placeholder="Enter opponent's custom archetype"
+              required
+            />
+            <button
+              type="button"
+              @click="toggleCustomOpponentArchetype"
+              class="btn-link custom-archetype-toggle"
+            >
+              Choose from list instead
+            </button>
+            <p class="help-text">Enter a custom opponent archetype</p>
+          </div>
         </div>
 
         <div class="form-group">
@@ -90,10 +119,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useScenarioStore, useDecklistStore } from '../store'
 import MtgCard from '../components/MtgCard.vue'
+import { getArchetypesForFormat } from '../data/archetypes'
 
 const router = useRouter()
 const route = useRoute()
@@ -112,6 +142,43 @@ const decklists = ref([])
 const preview = ref(null)
 const error = ref('')
 const submitting = ref(false)
+const showCustomOpponentArchetype = ref(false)
+const customOpponentArchetype = ref('')
+
+// Get selected decklist format
+const selectedDecklistFormat = computed(() => {
+  if (!form.value.decklist_id) return null
+  const decklist = decklists.value.find(d => d._id === form.value.decklist_id)
+  return decklist?.format || null
+})
+
+// Get opponent archetypes based on decklist format
+const opponentArchetypes = computed(() => {
+  if (!selectedDecklistFormat.value) {
+    return []
+  }
+  return getArchetypesForFormat(selectedDecklistFormat.value)
+})
+
+// Reset opponent archetype when decklist changes
+watch(() => form.value.decklist_id, () => {
+  form.value.opponent_archetype = ''
+  showCustomOpponentArchetype.value = false
+  customOpponentArchetype.value = ''
+})
+
+const toggleCustomOpponentArchetype = () => {
+  showCustomOpponentArchetype.value = !showCustomOpponentArchetype.value
+  if (showCustomOpponentArchetype.value) {
+    // Switching to custom input
+    customOpponentArchetype.value = form.value.opponent_archetype || ''
+    form.value.opponent_archetype = ''
+  } else {
+    // Switching back to dropdown
+    form.value.opponent_archetype = customOpponentArchetype.value || ''
+    customOpponentArchetype.value = ''
+  }
+}
 
 const loadDecklist = () => {
   if (form.value.decklist_id) {
@@ -139,12 +206,17 @@ const handleSubmit = async () => {
   submitting.value = true
   error.value = ''
 
+  // Use custom opponent archetype if present
+  const finalOpponentArchetype = showCustomOpponentArchetype.value
+    ? customOpponentArchetype.value
+    : form.value.opponent_archetype
+
   try {
     const scenario = await scenarioStore.createScenario({
       decklist_id: form.value.decklist_id,
       num_cards: form.value.num_cards,
       on_play: form.value.on_play,
-      opponent_archetype: form.value.opponent_archetype,
+      opponent_archetype: finalOpponentArchetype,
       game_number: form.value.game_number
     })
 
@@ -313,5 +385,11 @@ input:focus, select:focus {
   font-size: 0.9rem;
   color: #7f8c8d;
   font-style: italic;
+}
+
+.custom-archetype-toggle {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
 }
 </style>

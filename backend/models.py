@@ -53,10 +53,11 @@ class Decklist:
         }
 
 class Scenario:
-    def __init__(self, decklist_id, hand, on_play, opponent_archetype, game_number, user_id, _id=None):
+    def __init__(self, decklist_id, hand, on_play, opponent_archetype, game_number, user_id, mulligan_count=0, _id=None):
         self.decklist_id = decklist_id
-        self.hand = hand  # List of card names
-        self.num_cards = len(hand)
+        self.hand = hand  # Always 7 cards for London Mulligan
+        self.mulligan_count = mulligan_count  # How many times mulliganed (0-6)
+        self.num_cards = 7 - mulligan_count  # Final hand size after bottoming
         self.on_play = on_play  # True if on the play, False if on the draw
         self.opponent_archetype = opponent_archetype
         self.game_number = game_number  # 1, 2, or 3
@@ -71,6 +72,7 @@ class Scenario:
             '_id': str(self._id),
             'decklist_id': str(self.decklist_id),
             'hand': self.hand,
+            'mulligan_count': self.mulligan_count,
             'num_cards': self.num_cards,
             'on_play': self.on_play,
             'opponent_archetype': self.opponent_archetype,
